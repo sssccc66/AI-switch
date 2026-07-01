@@ -1,0 +1,19 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "thread_count": 2
+    },
+    "database": {
+        "host": "127.0.0.1",
+        "port": 3306,
+        "user": "ai_switch",
+        "password": "ai_switch_pass",
+        "db": "ai_switch",
+        "pool_size": 4
+    },
+    "rate_limiter": {
+        "default_capacity": 10,
+        "default_refill_rate": 5
+    }
+}
