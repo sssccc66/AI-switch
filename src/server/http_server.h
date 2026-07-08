@@ -8,6 +8,9 @@
 #include "middleware/middleware.h"           // 中间件链
 #include "util/config.h"                    // 服务器配置
 
+// 前置声明
+class adapter_factory;
+
 /**
  * http_server — HTTP 服务器主类
  * ===============================
@@ -38,7 +41,8 @@ public:
      */
     http_server(const app_config& config,
                 std::shared_ptr<router> router,
-                std::shared_ptr<middleware_chain> mw_chain);
+                std::shared_ptr<middleware_chain> mw_chain,
+                std::shared_ptr<adapter_factory> adapter_factory);
 
     // 禁用拷贝
     http_server(const http_server&) = delete;
@@ -65,6 +69,7 @@ private:
     boost::asio::signal_set signals_;             // 信号集 (SIGINT/SIGTERM → 优雅退出)
     std::shared_ptr<router> router_;              // 路由表 (所有 session 共享)
     std::shared_ptr<middleware_chain> mw_chain_;  // 中间件链 (所有 session 共享)
+    std::shared_ptr<adapter_factory> adapter_factory_; // AI 适配器工厂
     int thread_count_;                            // worker 线程数
 };
 

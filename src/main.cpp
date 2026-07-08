@@ -5,14 +5,15 @@
  * 这是整个程序的启动点, 负责:
  *   1. 解析命令行参数 (--config, --help)
  *   2. 加载配置文件 (默认 config.json, 支持环境变量覆盖)
- *   3. 从环境变量 DB_PASSWORD 覆盖数据库密码
+ *   3. 从环境变量 DB_PASSWORD / DEEPSEEK_API_KEY 覆盖敏感配置
  *   4. 连接 MySQL, 初始化连接池
  *   5. 构建中间件链 (鉴权 → 限流 → 日志)
- *   6. 注册路由
- *   7. 启动 HTTP 服务器 (阻塞, 直到 Ctrl+C)
+ *   6. 初始化 AI 适配器工厂 (DeepSeek / OpenAI)
+ *   7. 注册路由
+ *   8. 启动 HTTP 服务器 (阻塞, 直到 Ctrl+C)
  *
  * 后续每周会在这里逐步添加更多初始化步骤:
- *   Week 4: 注册 AI 适配器
+ *   Week 5: SSE 流式支持
  *   Week 5: SSE 流式支持
  *   Week 6: 统计、热加载等
  */
@@ -24,6 +25,8 @@
 #include "db/repository.h"          // 数据库查询
 #include "middleware/auth_middleware.h"  // 鉴权中间件
 #include "middleware/rate_limiter.h"     // 限流中间件
+#include "adapter/adapter_factory.h"    // AI 适配器工厂
+#include "adapter/deepseek_adapter.h"   // DeepSeek 适配器
 
 #include <iostream>
 #include <string>
@@ -58,65 +61,6 @@ http::response<http::string_body> handle_health(const http::request<http::string
 }
 
 // ============================================================
-// 路由处理函数: POST /api/chat
-//
-// Week 1 的桩实现 (stub):
-//   暂时只解析请求并返回一个模拟回复。
-//   目的是验证 POST 请求 + JSON 收发的完整通路。
-//
-// Week 4 会替换为真正的 AI 适配器调用。
-// ============================================================
-http::response<http::string_body> handle_chat(const http::request<http::string_body>& req) {
-    // ---- 1. 解析请求体 ----
-    json request_body;
-    try {
-        request_body = json::parse(req.body());
-    } catch (const json::parse_error& e) {
-        // JSON 格式错误 → 400 Bad Request
-        return router::make_error_response(
-            http::status::bad_request,
-            "invalid_json",
-            "请求体不是合法的 JSON: " + std::string(e.what()),
-            req.version(),
-            req.keep_alive());
-    }
-
-    // 提取用户消息 (用于后续处理)
-    std::string user_content;
-    if (request_body.contains("messages") && !request_body["messages"].empty()) {
-        user_content = request_body["messages"].back()["content"];
-    }
-
-    // ---- 2. 构建桩响应 (stub response) ----
-    // Week 4 会改为: 调用 OpenAI/DeepSeek API 并返回真实结果
-    json response_body = {
-        {"id", "chat_stub_001"},
-        {"model", request_body.value("model", "unknown")},
-        {"choices", {{
-            {"index", 0},
-            {"message", {
-                {"role", "assistant"},
-                {"content", "这是 Week 1 的桩回复。你说了: \"" + user_content + "\"\n"
-                            "真正的 AI 回复将在 Week 4 实现。"}
-            }},
-            {"finish_reason", "stop"}
-        }}},
-        {"usage", {
-            {"prompt_tokens",     0},
-            {"completion_tokens", 0},
-            {"total_tokens",      0}
-        }}
-    };
-
-    // 后续 Weeks: 这里还要把 message 存入数据库、记录日志等
-
-    return router::make_json_response(
-        response_body.dump(),
-        req.version(),
-        req.keep_alive());
-}
-
-// ============================================================
 // main — 程序入口
 // ============================================================
 int main(int argc, char* argv[]) {
@@ -144,7 +88,9 @@ int main(int argc, char* argv[]) {
                       << "  --help, -h       显示此帮助信息\n"
                       << "\n"
                       << "环境变量:\n"
-                      << "  DB_PASSWORD      覆盖数据库密码\n";
+                      << "  DB_PASSWORD      覆盖数据库密码\n"
+                      << "  DEEPSEEK_API_KEY 覆盖 DeepSeek API Key\n"
+                      << "  OPENAI_API_KEY   覆盖 OpenAI API Key\n";
             return 0;
         }
     }
@@ -165,11 +111,23 @@ int main(int argc, char* argv[]) {
 
     // ---- 3. 环境变量覆盖配置 ----
     // 数据库密码是敏感信息, 从环境变量读取比写在 config.json 更安全
-    // TODO: 如果环境变量 DB_PASSWORD 存在, 覆盖配置文件中的密码，后续连接数据库时使用环境变量的密码，生产部署时用环境变量覆盖    
     const char* env_db_password = std::getenv("DB_PASSWORD");
     if (env_db_password) {
         config.db_password = env_db_password;
         std::cout << "[main] 数据库密码已从环境变量 DB_PASSWORD 覆盖\n";
+    }
+
+    // AI API Key 也从环境变量读取，不写死在配置文件里
+    const char* env_deepseek_key = std::getenv("DEEPSEEK_API_KEY");
+    if (env_deepseek_key) {
+        config.deepseek_api_key = env_deepseek_key;
+        std::cout << "[main] DeepSeek API Key 已从环境变量 DEEPSEEK_API_KEY 覆盖\n";
+    }
+
+    const char* env_openai_key = std::getenv("OPENAI_API_KEY");
+    if (env_openai_key) {
+        config.openai_api_key = env_openai_key;
+        std::cout << "[main] OpenAI API Key 已从环境变量 OPENAI_API_KEY 覆盖\n";
     }
 
     // ---- 4. 初始化数据库连接池 ----
@@ -207,10 +165,24 @@ int main(int argc, char* argv[]) {
         config.rate_limit_refill_rate
     ));
 
-    // 后续 Week 4 会在这里添加: 日志中间件
+    // 后续 Week 5 会在这里添加: 日志中间件
     // mw_chain->add(std::make_unique<log_middleware>(...));
 
-    // ---- 6. 设置路由 ----
+    // ---- 6. 初始化 AI 适配器工厂 ----
+    auto ai_factory = std::make_shared<adapter_factory>();
+    if (!config.deepseek_api_key.empty()) {
+        ai_factory->register_adapter(
+            std::make_unique<deepseek_adapter>(
+                config.deepseek_api_key,
+                config.deepseek_base_url
+            )
+        );
+    }
+    if (ai_factory->count() == 0) {
+        std::cerr << "[main] 警告: 没有配置任何 AI 适配器\n";
+    }
+
+    // ---- 7. 设置路由 ----
     auto router_ptr = std::make_shared<router>();
 
     // GET /health — 健康检查 (不需要鉴权)
@@ -218,17 +190,74 @@ int main(int argc, char* argv[]) {
     // 所以在 auth_middleware 里需要放过 /health 路径
     router_ptr->add_route(http::verb::get, "/health", handle_health);
 
-    // POST /api/chat — 聊天接口 (桩实现)
-    router_ptr->add_route(http::verb::post, "/api/chat", handle_chat);
+    // POST /api/chat — 聊天接口 (调用 AI 适配器)
+    // 使用 lambda 捕获 ai_factory, 在请求到来时调用
+    router_ptr->add_route(http::verb::post, "/api/chat",
+        [ai_factory](const http::request<http::string_body>& req)
+            -> http::response<http::string_body> {
+
+            // ---- 1. 解析请求体 ----
+            json request_body;
+            try {
+                request_body = json::parse(req.body());
+            } catch (const json::parse_error& e) {
+                return router::make_error_response(
+                    http::status::bad_request,
+                    "invalid_json",
+                    "请求体不是合法的 JSON: " + std::string(e.what()),
+                    req.version(),
+                    req.keep_alive());
+            }
+
+            // ---- 2. 检查是否有适配器可用 ----
+            if (ai_factory->count() == 0) {
+                return router::make_error_response(
+                    http::status::service_unavailable,
+                    "no_ai_configured",
+                    "服务未配置任何 AI 模型, 请先设置 API Key",
+                    req.version(),
+                    req.keep_alive());
+            }
+
+            // ---- 3. 根据 model 选择适配器 ----
+            std::string model = request_body.value("model", "deepseek-chat");//  从请求体取 model 字段，没写则默认 "deepseek-chat"
+            adapter* ai = ai_factory->create(model);
+
+            if (!ai) {
+                return router::make_error_response(
+                    http::status::bad_request,
+                    "unsupported_model",
+                    "不支持的模型: " + model,
+                    req.version(),
+                    req.keep_alive());
+            }
+
+            // ---- 4. 调用 AI API ----
+            try {
+                json response_body = ai->chat_completion(request_body);
+                return router::make_json_response(
+                    response_body.dump(),
+                    req.version(),
+                    req.keep_alive());
+            } catch (const std::exception& e) {
+                return router::make_error_response(
+                    http::status::bad_gateway,
+                    "provider_error",
+                    "AI 服务响应错误: " + std::string(e.what()),
+                    req.version(),
+                    req.keep_alive());
+            }
+        }
+    );
 
     // 后续会加上的路由:
     // POST /api/session
     // GET  /api/session/{id}/history
     // GET  /api/metrics
 
-    // ---- 7. 启动 HTTP 服务器 ----
+    // ---- 8. 启动 HTTP 服务器 ----
     try {
-        http_server server(config, router_ptr, mw_chain);
+        http_server server(config, router_ptr, mw_chain, ai_factory);
         server.run();  // 阻塞, 直到 Ctrl+C
     } catch (const std::exception& e) {
         std::cerr << "[main] 启动失败: " << e.what() << "\n";

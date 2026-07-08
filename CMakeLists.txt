@@ -45,8 +45,15 @@ else()
     message(FATAL_ERROR "未找到 MySQL 库, 请安装: sudo apt install libmysqlclient-dev")
 endif()
 
+# CURL: 用于调用外部 AI API (libcurl)
+find_package(CURL REQUIRED)
+if(CURL_FOUND)
+    message(STATUS "CURL include: ${CURL_INCLUDE_DIRS}")
+    message(STATUS "CURL library: ${CURL_LIBRARIES}")
+endif()
+
 # ============================================================
-# 源文件列表 — Week 3 加入了限流器
+# 源文件列表 — Week 5 加入了流式 SSE
 # ============================================================
 set(SOURCES
     src/main.cpp
@@ -58,6 +65,9 @@ set(SOURCES
     src/db/repository.cpp
     src/middleware/auth_middleware.cpp
     src/middleware/rate_limiter.cpp
+    src/adapter/deepseek_adapter.cpp
+    src/adapter/adapter_factory.cpp
+    src/stream/sse_handler.cpp
 )
 
 # ============================================================
@@ -68,12 +78,14 @@ add_executable(ai-switch ${SOURCES})
 target_include_directories(ai-switch PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${MySQL_INCLUDE_DIRS}
+    ${CURL_INCLUDE_DIRS}
 )
 
 target_link_libraries(ai-switch PRIVATE
     Boost::system          # Asio 错误码、系统函数等
     nlohmann_json::nlohmann_json  # JSON 解析
     ${MySQL_LIBRARIES}     # MySQL 客户端库 (libmysqlclient)
+    ${CURL_LIBRARIES}      # libcurl (调 AI API)
     pthread                # Asio 多线程需要
 )
 

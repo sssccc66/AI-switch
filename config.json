@@ -8,12 +8,22 @@
         "host": "127.0.0.1",
         "port": 3306,
         "user": "ai_switch",
-        "password": "ai_switch_pass",
+        "password": "",
         "db": "ai_switch",
         "pool_size": 4
     },
     "rate_limiter": {
         "default_capacity": 10,
         "default_refill_rate": 5
+    },
+    "ai_models": {
+        "deepseek": {
+            "api_key": "",
+            "base_url": "https://api.deepseek.com/v1"
+        },
+        "openai": {
+            "api_key": "",
+            "base_url": "https://api.openai.com/v1"
+        }
     }
 }

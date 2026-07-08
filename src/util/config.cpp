@@ -49,11 +49,29 @@ app_config app_config::from_file(const std::string& path) {
             cfg.rate_limit_refill_rate = rl.value("default_refill_rate", cfg.rate_limit_refill_rate);
         }
 
+        // ---- AI 模型配置 ----
+        if (root.contains("ai_models")) {
+            const auto& models = root["ai_models"];
+
+            if (models.contains("deepseek")) {
+                const auto& ds = models["deepseek"];
+                cfg.deepseek_api_key  = ds.value("api_key",  cfg.deepseek_api_key);
+                cfg.deepseek_base_url = ds.value("base_url", cfg.deepseek_base_url);
+            }
+            if (models.contains("openai")) {
+                const auto& oa = models["openai"];
+                cfg.openai_api_key  = oa.value("api_key",  cfg.openai_api_key);
+                cfg.openai_base_url = oa.value("base_url", cfg.openai_base_url);
+            }
+        }
+
         std::cout << "[config] 已加载配置: "
                   << cfg.host << ":" << cfg.port
                   << ", threads=" << cfg.thread_count
                   << ", db=" << cfg.db_name
                   << ", rate_limit=" << cfg.rate_limit_refill_rate << "/s"
+                  << ", deepseek=" << (cfg.deepseek_api_key.empty() ? "未配置" : "已配置")
+                  << ", openai=" << (cfg.openai_api_key.empty() ? "未配置" : "已配置")
                   << "\n";
 
         cfg.loaded = true;  // ✓ 标记配置已成功加载

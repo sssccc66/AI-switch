@@ -29,6 +29,12 @@ struct app_config {
     int64_t rate_limit_capacity = 10;       // 令牌桶容量 (最大突发请求数)
     int64_t rate_limit_refill_rate = 5;     // 每秒补充令牌数 (稳定速率)
 
+    // ---- AI 模型 ----
+    std::string deepseek_api_key;           // DeepSeek API Key
+    std::string deepseek_base_url = "https://api.deepseek.com/v1";
+    std::string openai_api_key;             // OpenAI API Key
+    std::string openai_base_url = "https://api.openai.com/v1";
+
     /// 配置文件是否成功加载
     /// from_file() 如果找不到文件, loaded = false, 但会返回默认值
     /// 这样 main.cpp 可以判断: 用户指定了 --config 但没加载到 → 报错退出
