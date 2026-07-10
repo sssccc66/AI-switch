@@ -25,6 +25,7 @@
 #include "db/repository.h"          // 数据库查询
 #include "middleware/auth_middleware.h"  // 鉴权中间件
 #include "middleware/rate_limiter.h"     // 限流中间件
+#include "middleware/log_middleware.h"   // 日志中间件
 #include "adapter/adapter_factory.h"    // AI 适配器工厂
 #include "adapter/deepseek_adapter.h"   // DeepSeek 适配器
 
@@ -165,8 +166,8 @@ int main(int argc, char* argv[]) {
         config.rate_limit_refill_rate
     ));
 
-    // 后续 Week 5 会在这里添加: 日志中间件
-    // mw_chain->add(std::make_unique<log_middleware>(...));
+    // 日志中间件: 记录请求信息和耗时
+    mw_chain->add(std::make_unique<log_middleware>());
 
     // ---- 6. 初始化 AI 适配器工厂 ----
     auto ai_factory = std::make_shared<adapter_factory>();
@@ -250,10 +251,108 @@ int main(int argc, char* argv[]) {
         }
     );
 
-    // 后续会加上的路由:
-    // POST /api/session
-    // GET  /api/session/{id}/history
-    // GET  /api/metrics
+    // ---- 管理 API (Week 6) ----
+    // 管理接口的 Master Key 验证
+    auto verify_admin = [&config](const http::request<http::string_body>& req) {
+        auto auth = req.find(http::field::authorization);
+        if (auth == req.end()) return false;
+        std::string val(auth->value());
+        return val == "Bearer " + config.admin_master_key;
+    };
+
+    // POST /admin/api-keys — 创建新 Key
+    router_ptr->add_route(http::verb::post, "/admin/api-keys",
+        [&config, repo, verify_admin](const http::request<http::string_body>& req)
+            -> http::response<http::string_body> {
+
+            if (!verify_admin(req)) {
+                return router::make_error_response(
+                    http::status::unauthorized, "auth_failed",
+                    "无效的管理 Key", req.version(), req.keep_alive());
+            }
+
+            json body;
+            try { body = json::parse(req.body()); }
+            catch (...) {
+                return router::make_error_response(
+                    http::status::bad_request, "invalid_json",
+                    "请求体不是合法 JSON", req.version(), req.keep_alive());
+            }
+
+            std::string name = body.value("name", "");
+            int rate_limit = body.value("rate_limit", 60);
+            if (name.empty()) {
+                return router::make_error_response(
+                    http::status::bad_request, "missing_name",
+                    "缺少 name 字段", req.version(), req.keep_alive());
+            }
+
+            auto key = repo->create_api_key(name, rate_limit);
+            json result = {{"api_key", key.api_key}, {"name", key.name}, {"rate_limit", key.rate_limit}};
+            return router::make_json_response(result.dump(), req.version(), req.keep_alive());
+        }
+    );
+
+    // GET /admin/api-keys — 列出所有 Key
+    router_ptr->add_route(http::verb::get, "/admin/api-keys",
+        [&config, repo, verify_admin](const http::request<http::string_body>& req)
+            -> http::response<http::string_body> {
+
+            if (!verify_admin(req)) {
+                return router::make_error_response(
+                    http::status::unauthorized, "auth_failed",
+                    "无效的管理 Key", req.version(), req.keep_alive());
+            }
+
+            auto keys = repo->list_api_keys();
+            json arr = json::array();
+            for (const auto& k : keys) {
+                arr.push_back({{"id", k.id}, {"api_key", k.api_key},
+                               {"name", k.name}, {"rate_limit", k.rate_limit},
+                               {"enabled", k.enabled}});
+            }
+            return router::make_json_response(arr.dump(), req.version(), req.keep_alive());
+        }
+    );
+
+    // DELETE /admin/api-keys/{id} — 禁用 Key
+    // 注意: URL 中的 ID 通过请求体传入 (简化实现)
+    router_ptr->add_route(http::verb::delete_, "/admin/api-keys",
+        [&config, repo, verify_admin](const http::request<http::string_body>& req)
+            -> http::response<http::string_body> {
+
+            if (!verify_admin(req)) {
+                return router::make_error_response(
+                    http::status::unauthorized, "auth_failed",
+                    "无效的管理 Key", req.version(), req.keep_alive());
+            }
+
+            json body;
+            try { body = json::parse(req.body()); }
+            catch (...) {
+                return router::make_error_response(
+                    http::status::bad_request, "invalid_json",
+                    "请传 {\"id\": N}", req.version(), req.keep_alive());
+            }
+
+            int64_t id = body.value("id", 0LL);
+            if (id <= 0) {
+                return router::make_error_response(
+                    http::status::bad_request, "invalid_id",
+                    "请传有效的 id", req.version(), req.keep_alive());
+            }
+
+            if (repo->disable_api_key(id)) {
+                json result = {{"status", "disabled"}, {"id", id}};
+                return router::make_json_response(result.dump(), req.version(), req.keep_alive());
+            }
+
+            return router::make_error_response(
+                http::status::not_found, "not_found",
+                "未找到 id=" + std::to_string(id) + " 的 Key",
+                req.version(), req.keep_alive());
+        }
+    );
 
     // ---- 8. 启动 HTTP 服务器 ----
     try {

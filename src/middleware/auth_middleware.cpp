@@ -66,10 +66,10 @@ auth_middleware::auth_middleware(std::shared_ptr<repository> repo)
 // ============================================================
 void auth_middleware::process(context& ctx) {
     // ---- 0. 检查是否在白名单中 ----
-    // 某些路径不需要鉴权, 例如健康检查接口
+    // 某些路径不需要鉴权, 例如健康检查和管理接口
     std::string target(ctx.request.target());
-    if (target == "/health") {
-        // 健康检查直接放行, 不检查 API Key
+    if (target == "/health" || target.find("/admin/") == 0) {
+        // 健康检查和管理接口放行, 不检查 API Key
         return;
     }
 
@@ -90,9 +90,23 @@ void auth_middleware::process(context& ctx) {
     }
 
     // ---- 2. 查询数据库 ----
-    auto key_info = repo_->find_api_key(token);
+    auto result = repo_->find_api_key(token);
 
-    if (!key_info.has_value()) {
+    // 先检查数据库是否出错（连接池超时等）
+    if (result.db_error) {
+        std::cerr << "[auth] 数据库错误, 返回 503\n";
+        ctx.response = router::make_error_response(
+            http::status::service_unavailable,  // 503
+            "service_unavailable",
+            "服务暂时不可用, 请稍后重试",
+            ctx.request.version(),
+            ctx.request.keep_alive());
+        ctx.terminated = true;
+        return;
+    }
+
+    // 再检查 Key 是否有效
+    if (!result.found) {
         // Key 不存在或被禁用
         std::cout << "[auth] 鉴权失败: API Key 无效或已禁用\n";
 
@@ -108,10 +122,10 @@ void auth_middleware::process(context& ctx) {
 
     // ---- 3. ✅ 鉴权通过 ----
     // 在 context 中保存 api_key_id, 后续的中间件 (限流器、日志等) 会用到
-    ctx.api_key_id = key_info->id;
+    ctx.api_key_id = result.info.id;
 
-    std::cout << "[auth] 鉴权通过: key_id=" << key_info->id
-              << " (" << key_info->name << ")\n";
+    std::cout << "[auth] 鉴权通过: key_id=" << result.info.id
+              << " (" << result.info.name << ")\n";
 
     // terminated 保持 false, chain 继续执行
 }

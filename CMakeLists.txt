@@ -65,6 +65,7 @@ set(SOURCES
     src/db/repository.cpp
     src/middleware/auth_middleware.cpp
     src/middleware/rate_limiter.cpp
+    src/middleware/log_middleware.cpp
     src/adapter/deepseek_adapter.cpp
     src/adapter/adapter_factory.cpp
     src/stream/sse_handler.cpp
@@ -113,4 +114,23 @@ configure_file(
     ${CMAKE_SOURCE_DIR}/config.json
     ${CMAKE_BINARY_DIR}/config.json
     COPYONLY
+)
+
+# ============================================================
+# 单元测试 — 令牌桶
+# ============================================================
+add_executable(test_rate_limiter
+    tests/test_rate_limiter.cpp
+    src/middleware/rate_limiter.cpp
+    src/server/router.cpp
+)
+
+target_include_directories(test_rate_limiter PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_rate_limiter PRIVATE
+    Boost::system
+    nlohmann_json::nlohmann_json
+    pthread
 )

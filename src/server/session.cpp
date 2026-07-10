@@ -131,9 +131,13 @@ void session::handle_request() {
             return;
         }
     } catch (...) {
-        // 解析失败走正常路由
+        // JSON 解析失败走正常路由
     }
 
+    // 能走到这里说明：
+    //   ① 请求没被中间件拦截
+    //   ② 要么客户端没要 stream，要么 JSON 解析失败，要么没有适配器走流式
+    //   交给 router 按 URL 分发
     res_ = router_->dispatch(req_);
     do_write();
 }

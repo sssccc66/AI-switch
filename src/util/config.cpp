@@ -65,6 +65,12 @@ app_config app_config::from_file(const std::string& path) {
             }
         }
 
+        // ---- 管理接口配置 ----
+        if (root.contains("admin")) {
+            const auto& admin = root["admin"];
+            cfg.admin_master_key = admin.value("master_key", cfg.admin_master_key);
+        }
+
         std::cout << "[config] 已加载配置: "
                   << cfg.host << ":" << cfg.port
                   << ", threads=" << cfg.thread_count

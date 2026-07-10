@@ -11,7 +11,8 @@
       "Bash(powershell.exe -Command \"Get-ChildItem 'D:\\\\AI-switch\\\\src\\\\adapter\\\\*' -Name\")",
       "Bash(mount)",
       "Bash(cmake .. -G \"MinGW Makefiles\")",
-      "Bash(rm -rf CMakeCache.txt CMakeFiles && cmake .. -G \"MinGW Makefiles\" 2>&1)"
+      "Bash(rm -rf CMakeCache.txt CMakeFiles && cmake .. -G \"MinGW Makefiles\" 2>&1)",
+      "Bash(ssh -T git@github.com)"
     ],
     "additionalDirectories": [
       "\\mnt\\d\\AI-switch\\src",

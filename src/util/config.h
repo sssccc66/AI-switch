@@ -35,6 +35,9 @@ struct app_config {
     std::string openai_api_key;             // OpenAI API Key
     std::string openai_base_url = "https://api.openai.com/v1";
 
+    // ---- 管理 ----
+    std::string admin_master_key = "admin-master-key-001";  // 管理接口的 Master Key
+
     /// 配置文件是否成功加载
     /// from_file() 如果找不到文件, loaded = false, 但会返回默认值
     /// 这样 main.cpp 可以判断: 用户指定了 --config 但没加载到 → 报错退出
