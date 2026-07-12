@@ -169,10 +169,18 @@ void deepseek_adapter::chat_completion_stream(
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
-    // 检查错误
+    // 检查网络错误
     if (res != CURLE_OK && res != CURLE_WRITE_ERROR) {
         throw std::runtime_error(
             "HTTP 请求失败: " + std::string(curl_easy_strerror(res)));
+    }
+
+    // 检查 HTTP 状态码
+    if (http_code != 200) {
+        // 流式请求中如果状态码非 200，可能已经有部分数据通过回调发送了
+        // 但还是要通知调用方出错了
+        throw std::runtime_error(
+            "API 返回错误 (HTTP " + std::to_string(http_code) + ")");
     }
 }
 

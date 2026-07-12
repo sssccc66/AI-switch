@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- 3. sessions — 会话表 (Week 4 会话管理用, 先建好结构)
+-- 3. sessions — 会话表
 --    每个对话一个 session, 可以关联多条消息
 -- ============================================================
 CREATE TABLE IF NOT EXISTS sessions (
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 ) ENGINE=InnoDB;
 
 -- ============================================================
--- 4. messages — 消息表 (Week 4 会话管理用)
+-- 4. messages — 消息表 
 --    一条请求或回复
 -- ============================================================
 CREATE TABLE IF NOT EXISTS messages (
@@ -59,7 +59,6 @@ CREATE TABLE IF NOT EXISTS messages (
 
 -- ============================================================
 -- 5. 插入测试用的 API Key
---    等 Week 2 鉴权写完后, 用这个 Key 测试
 -- ============================================================
 INSERT INTO api_keys (api_key, name, rate_limit, enabled) VALUES
     ('sk-test-key-001', '测试 Key - 60 RPM',  60,  1),

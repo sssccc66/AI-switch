@@ -13,9 +13,10 @@
  */
 struct app_config {
     // ---- HTTP 服务器 ----
-    std::string host = "0.0.0.0";   // 监听地址 (0.0.0.0 = 所有网卡)
-    uint16_t    port = 8080;         // 监听端口
-    int         thread_count = 2;    // Asio worker 线程数 (2 通常够用)
+    std::string host = "0.0.0.0";       // 监听地址
+    uint16_t    port = 8080;             // 监听端口
+    int         thread_count = 4;        // Asio worker 线程数
+    int         thread_pool_size = 8;    // 流式请求线程池大小
 
     // ---- 数据库 (MySQL) ----
     std::string db_host = "127.0.0.1";

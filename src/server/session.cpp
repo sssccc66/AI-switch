@@ -1,9 +1,9 @@
 #include "session.h"
 #include "adapter/adapter_factory.h"     // AI 适配器工厂
+#include "util/thread_pool.h"             // 线程池
 #include "stream/sse_handler.h"           // SSE 格式
 
 #include <iostream>  // 控制台日志
-#include <thread>    // std::thread (流式请求在独立线程跑)
 #include <nlohmann/json.hpp>
 
 namespace beast = boost::beast;  // Beast 命名空间缩写
@@ -16,11 +16,13 @@ using json = nlohmann::json;
 session::session(boost::asio::ip::tcp::socket socket,
                  std::shared_ptr<router> router,
                  std::shared_ptr<middleware_chain> mw_chain,
-                 std::shared_ptr<adapter_factory> af)
+                 std::shared_ptr<adapter_factory> af,
+                 thread_pool* pool)
     : stream_(std::move(socket))
     , router_(std::move(router))
     , mw_chain_(std::move(mw_chain))
     , adapter_factory_(std::move(af))
+    , thread_pool_(pool)
 {
 }
 
@@ -107,25 +109,31 @@ void session::handle_request() {
             // 发送 SSE 响应头, 完成后自动启动流式线程
             start_stream(req_.version(), req_.keep_alive(),
                 [self = shared_from_this(), ai, body]() {
-                    // 这个回调在头写入完成后执行
-                    std::thread([self, ai, body]() {
-                        try {
-                            ai->chat_completion_stream(body,
-                                [self](std::string content, bool done) {
-                                    boost::asio::post(self->stream_.get_executor(),
-                                        [self, content, done]() {
-                                            self->send_stream_chunk(
-                                                sse_handler::make_chunk(content), done);
-                                        });
-                                });
-                        } catch (const std::exception& e) {
-                            std::cerr << "[session] 流式错误: " << e.what() << "\n";
-                            boost::asio::post(self->stream_.get_executor(),
-                                [self]() {
-                                    self->send_stream_chunk("", true);
-                                });
-                        }
-                    }).detach();
+                    // 使用线程池代替 std::thread
+                    if (self->thread_pool_) {
+                        self->thread_pool_->submit([self, ai, body]() {
+                            try {
+                                ai->chat_completion_stream(body,
+                                    [self](std::string content, bool done) {
+                                        boost::asio::post(self->stream_.get_executor(),
+                                            [self, content, done]() {
+                                                self->send_stream_chunk(
+                                                    sse_handler::make_chunk(content), done);
+                                            });
+                                    });
+                            } catch (const std::exception& e) {
+                                std::cerr << "[session] 流式错误: " << e.what() << "\n";
+                                boost::asio::post(self->stream_.get_executor(),
+                                    [self, msg = std::string(e.what())]() {
+                                        // 先发一条错误消息，再关闭
+                                        std::string err = "data: {\"error\":{\"code\":\"provider_error\","
+                                                          "\"message\":\"" + msg + "\"}}\n\n";
+                                        self->send_stream_chunk(err, false);
+                                        self->send_stream_chunk("", true);
+                                    });
+                            }
+                        });
+                    }
                 });
 
             return;

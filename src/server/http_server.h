@@ -10,6 +10,7 @@
 
 // 前置声明
 class adapter_factory;
+class thread_pool;
 
 /**
  * http_server — HTTP 服务器主类
@@ -42,7 +43,8 @@ public:
     http_server(const app_config& config,
                 std::shared_ptr<router> router,
                 std::shared_ptr<middleware_chain> mw_chain,
-                std::shared_ptr<adapter_factory> adapter_factory);
+                std::shared_ptr<adapter_factory> adapter_factory,
+                thread_pool* pool);
 
     // 禁用拷贝
     http_server(const http_server&) = delete;
@@ -70,6 +72,7 @@ private:
     std::shared_ptr<router> router_;              // 路由表 (所有 session 共享)
     std::shared_ptr<middleware_chain> mw_chain_;  // 中间件链 (所有 session 共享)
     std::shared_ptr<adapter_factory> adapter_factory_; // AI 适配器工厂
+    thread_pool* thread_pool_;                         // 线程池
     int thread_count_;                            // worker 线程数
 };
 

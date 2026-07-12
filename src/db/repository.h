@@ -40,8 +40,8 @@ struct api_key_result {
  *
  * 封装所有 MySQL 查询操作:
  *   - 查 API Key (鉴权用)
- *   - 建会话 (Week 4)
- *   - 存消息 (Week 4)
+ *   - 建会话 
+ *   - 存消息 
  *
  * 内部使用 connection_pool 获取连接。
  * 查询完成后自动归还连接。
@@ -62,7 +62,7 @@ public:
      */
     api_key_result find_api_key(const std::string& key);
 
-    // ---- 管理接口 (Week 6) ----
+    // ---- 管理接口 ----
 
     /**
      * 创建新的 API Key

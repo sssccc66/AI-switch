@@ -29,6 +29,7 @@ app_config app_config::from_file(const std::string& path) {
             cfg.host         = srv.value("host", cfg.host);
             cfg.port         = srv.value("port", cfg.port);
             cfg.thread_count = srv.value("thread_count", cfg.thread_count);
+            cfg.thread_pool_size = srv.value("thread_pool_size", cfg.thread_pool_size);
         }
 
         // ---- 数据库配置 ----

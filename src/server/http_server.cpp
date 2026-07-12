@@ -1,6 +1,8 @@
 #include "http_server.h"
 #include "session.h"        // 每个新连接创建一个 session
 
+#include "util/thread_pool.h"   // 线程池 (用于传递指针)
+
 #include <iostream>          // 控制台输出
 #include <thread>            // 多线程 worker
 #include <vector>
@@ -15,13 +17,15 @@
 http_server::http_server(const app_config& config,
                          std::shared_ptr<router> router,
                          std::shared_ptr<middleware_chain> mw_chain,
-                         std::shared_ptr<adapter_factory> adapter_factory)
+                         std::shared_ptr<adapter_factory> adapter_factory,
+                         thread_pool* pool)
     : ioc_(config.thread_count + 1)    // io_context 的并发提示 (非精确限制)
     , acceptor_(ioc_)                   // acceptor 绑定到 io_context
     , signals_(ioc_, SIGINT, SIGTERM)   // 注册要捕获的信号
     , router_(std::move(router))
     , mw_chain_(std::move(mw_chain))
     , adapter_factory_(std::move(adapter_factory))
+    , thread_pool_(pool)
     , thread_count_(config.thread_count)
 {
     boost::beast::error_code ec;
@@ -155,6 +159,7 @@ void http_server::stop() {
 void http_server::do_accept() {
     // acceptor_.async_accept 异步等待新连接
     // socket 在回调中创建并传入
+    // 三次握手建立连接
     acceptor_.async_accept(
         [this](boost::beast::error_code ec, boost::asio::ip::tcp::socket socket) {
             if (ec) {
@@ -168,7 +173,7 @@ void http_server::do_accept() {
 
             // ✅ 收到新连接 → 创建 session, 启动它
             auto ses = std::make_shared<session>(
-                std::move(socket), router_, mw_chain_, adapter_factory_);
+                std::move(socket), router_, mw_chain_, adapter_factory_, thread_pool_);
             ses->run();
 
             // 继续等待下一个连接 (异步循环)

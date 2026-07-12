@@ -9,13 +9,10 @@
  *   4. 连接 MySQL, 初始化连接池
  *   5. 构建中间件链 (鉴权 → 限流 → 日志)
  *   6. 初始化 AI 适配器工厂 (DeepSeek / OpenAI)
- *   7. 注册路由
- *   8. 启动 HTTP 服务器 (阻塞, 直到 Ctrl+C)
+ *   7. 创建线程池 (流式请求)
+ *   8. 注册路由
+ *   9. 启动 HTTP 服务器 (阻塞, 直到 Ctrl+C)
  *
- * 后续每周会在这里逐步添加更多初始化步骤:
- *   Week 5: SSE 流式支持
- *   Week 5: SSE 流式支持
- *   Week 6: 统计、热加载等
  */
 
 #include "util/config.h"
@@ -28,6 +25,7 @@
 #include "middleware/log_middleware.h"   // 日志中间件
 #include "adapter/adapter_factory.h"    // AI 适配器工厂
 #include "adapter/deepseek_adapter.h"   // DeepSeek 适配器
+#include "util/thread_pool.h"           // 线程池
 
 #include <iostream>
 #include <string>
@@ -183,7 +181,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "[main] 警告: 没有配置任何 AI 适配器\n";
     }
 
-    // ---- 7. 设置路由 ----
+    // ---- 7. 创建线程池 ----
+    thread_pool ai_thread_pool(config.thread_pool_size);
+
+    // ---- 8. 设置路由 ----
     auto router_ptr = std::make_shared<router>();
 
     // GET /health — 健康检查 (不需要鉴权)
@@ -251,7 +252,7 @@ int main(int argc, char* argv[]) {
         }
     );
 
-    // ---- 管理 API (Week 6) ----
+    // ---- 管理 API  ----
     // 管理接口的 Master Key 验证
     auto verify_admin = [&config](const http::request<http::string_body>& req) {
         auto auth = req.find(http::field::authorization);
@@ -354,9 +355,9 @@ int main(int argc, char* argv[]) {
         }
     );
 
-    // ---- 8. 启动 HTTP 服务器 ----
+    // ---- 9. 启动 HTTP 服务器 ----
     try {
-        http_server server(config, router_ptr, mw_chain, ai_factory);
+        http_server server(config, router_ptr, mw_chain, ai_factory, &ai_thread_pool);
         server.run();  // 阻塞, 直到 Ctrl+C
     } catch (const std::exception& e) {
         std::cerr << "[main] 启动失败: " << e.what() << "\n";

@@ -9,8 +9,9 @@
 #include "router.h"              // 用于 dispatch
 #include "middleware/middleware.h"  // 中间件链: 鉴权 → 限流 → ...
 
-// 前置声明 (避免在 .h 中包含 adapter 头文件)
+// 前置声明
 class adapter_factory;
+class thread_pool;
 
 /**
  * session — 一个 HTTP 连接的生命周期管理
@@ -34,7 +35,8 @@ public:
     session(boost::asio::ip::tcp::socket socket,
             std::shared_ptr<router> router,
             std::shared_ptr<middleware_chain> mw_chain,
-            std::shared_ptr<adapter_factory> adapter_factory);
+            std::shared_ptr<adapter_factory> adapter_factory,
+            thread_pool* pool);
 
     // 禁用拷贝 (session 是 unique 的资源管理类)
     session(const session&) = delete;
@@ -62,7 +64,7 @@ private:
     /// 关闭 TCP 连接
     void do_close();
 
-    // ---- 流式响应 (Week 5 SSE) ----
+    // ---- 流式响应 ----
 
     /// 开始流式响应: 发送 HTTP 头, 完成后调 callback 启动数据流
     void start_stream(unsigned version, bool keep_alive,
@@ -80,6 +82,7 @@ private:
     std::shared_ptr<router> router_;           // 路由器 (线程安全, 只读)
     std::shared_ptr<middleware_chain> mw_chain_;  // 中间件链 (鉴权→限流→日志)
     std::shared_ptr<adapter_factory> adapter_factory_;  // AI 适配器工厂
+    thread_pool* thread_pool_;                           // 线程池 (不拥有, 不负责释放)
 
     // ---- 流式状态 ----
     bool is_streaming_ = false;                // 是否正在流式输出
