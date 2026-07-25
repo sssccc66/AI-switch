@@ -13,7 +13,7 @@ AI-switch 是一个高性能异步 AI API 代理网关，统一管理多个 AI �
 - **异步 HTTP 服务** — 基于 Boost.Beast + Asio 的事件循环架构，多线程 worker
 - **API Key 鉴权** — 请求级别的密钥验证，支持启用/禁用
 - **令牌桶限流** — 原子操作无锁消费，按时间懒补充
-- **AI 适配器** — 策略模式设计，已支持 DeepSeek，预留 OpenAI 接口
+- **AI 适配器** — 策略模式设计，已适配 **DeepSeek、OpenAI、Anthropic Claude** 三款模型
 - **流式响应** — SSE 协议逐 chunk 转发，libcurl 接收 → asio::post → 异步写回
 - **管理 API** — 动态创建、列出、禁用 API Key
 - **MySQL 持久化** — 连接池复用，超时保护，SQL 注入防护
@@ -31,14 +31,24 @@ Client ──→ HTTP Server (Beast + Asio)
           Auth → Rate Limit → Log
                 │
           AI Adapter Layer
-          DeepSeek / OpenAI
+          DeepSeek / OpenAI / Anthropic
                 │
           External AI API
                 │
           MySQL (api_keys, sessions, messages)
 ```
 
-中间件链采用**责任链模式**，可插拔扩展；AI 适配器采用**策略模式**，新增模型只需实现适配器接口。
+### 适配器架构
+
+```
+adapter（抽象接口）
+ ├── openai_compatible_adapter（基类，收拢 HTTP/SSE 公共逻辑）
+ │     ├── deepseek_adapter（只传配置）
+ │     └── openai_adapter（只传配置）
+ └── anthropic_adapter（独立实现，Claude 协议不兼容 OpenAI）
+```
+
+**策略模式**：DeepSeek 和 OpenAI 协议兼容，共用基类实现；Anthropic 协议不同，独立实现但接口一致。
 
 ---
 
@@ -95,13 +105,13 @@ curl http://localhost:8080/health
 curl -X POST http://localhost:8080/api/chat \
   -H "Authorization: Bearer <your-api-key>" \
   -H "Content-Type: application/json" \
-  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"你好"}]}'
+  -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"你好"}]}'
 
 # 流式（SSE）
 curl -N -X POST http://localhost:8080/api/chat \
   -H "Authorization: Bearer <your-api-key>" \
   -H "Content-Type: application/json" \
-  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"你好"}],"stream":true}'
+  -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"你好"}],"stream":true}'
 ```
 
 ### 管理接口
@@ -148,7 +158,11 @@ curl -X DELETE http://localhost:8080/admin/api-keys \
 ### 环境变量
 
 ```bash
-DB_PASSWORD=xxx DEEPSEEK_API_KEY=xxx OPENAI_API_KEY=xxx ./ai-switch
+DB_PASSWORD=xxx \
+DEEPSEEK_API_KEY=xxx \
+OPENAI_API_KEY=xxx \
+ANTHROPIC_API_KEY=xxx \
+./ai-switch
 ```
 
 优先级：环境变量 > 配置文件 > 默认值。
@@ -199,9 +213,12 @@ AI-switch/
 │   │   ├── auth         # API Key 鉴权
 │   │   ├── rate_limiter # 令牌桶限流
 │   │   └── log          # 请求日志
-│   ├── adapter/         # AI 适配器
+│   ├── adapter/         # AI 适配器（策略模式）
 │   │   ├── adapter      # 抽象接口
-│   │   ├── deepseek     # DeepSeek 实现
+│   │   ├── openai_compatible_adapter  # OpenAI 协议兼容基类
+│   │   ├── deepseek     # DeepSeek 实现（继承基类）
+│   │   ├── openai       # OpenAI 实现（继承基类）
+│   │   ├── anthropic    # Claude 独立实现
 │   │   └── factory      # 适配器工厂
 │   ├── stream/          # SSE 流式处理
 │   ├── db/              # 数据库层
@@ -213,20 +230,6 @@ AI-switch/
 └── tests/
     └── test_rate_limiter
 ```
-
----
-
-## 开发计划
-
-- [x] HTTP 服务 + 路由分发
-- [x] MySQL 集成 + API Key 鉴权
-- [x] 令牌桶限流 + CAS 原子操作
-- [x] DeepSeek AI 适配器（非流式 + 流式 SSE）
-- [x] 管理 API（创建/列出/禁用 Key）
-- [x] 线程池 + 配置安全优化
-- [ ] OpenAI 适配器
-- [ ] 配置热加载
-- [ ] Prometheus 监控指标
 
 ---
 
