@@ -13,7 +13,7 @@ AI-switch 是一个高性能异步 AI API 代理网关，统一管理多个 AI �
 - **异步 HTTP 服务** — 基于 Boost.Beast + Asio 的事件循环架构，多线程 worker
 - **API Key 鉴权** — 请求级别的密钥验证，支持启用/禁用
 - **令牌桶限流** — 原子操作无锁消费，按时间懒补充
-- **AI 适配器** — 策略模式设计，已适配 **DeepSeek、OpenAI、Anthropic Claude** 三款模型
+- **AI 适配器** — 策略模式设计，已适配 **OpenAI、Anthropic** 两种协议
 - **流式响应** — SSE 协议逐 chunk 转发，libcurl 接收 → asio::post → 异步写回
 - **管理 API** — 动态创建、列出、禁用 API Key
 - **MySQL 持久化** — 连接池复用，超时保护，SQL 注入防护
