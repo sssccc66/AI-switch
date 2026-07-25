@@ -66,9 +66,13 @@ set(SOURCES
     src/middleware/auth_middleware.cpp
     src/middleware/rate_limiter.cpp
     src/middleware/log_middleware.cpp
+    src/adapter/openai_compatible_adapter.cpp
     src/adapter/deepseek_adapter.cpp
+    src/adapter/openai_adapter.cpp
+    src/adapter/anthropic_adapter.cpp
     src/adapter/adapter_factory.cpp
     src/stream/sse_handler.cpp
+    src/util/thread_pool.cpp
 )
 
 # ============================================================

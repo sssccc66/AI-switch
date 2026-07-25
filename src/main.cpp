@@ -25,6 +25,7 @@
 #include "middleware/log_middleware.h"   // 日志中间件
 #include "adapter/adapter_factory.h"    // AI 适配器工厂
 #include "adapter/deepseek_adapter.h"   // DeepSeek 适配器
+#include "adapter/openai_adapter.h"     // OpenAI 适配器
 #include "util/thread_pool.h"           // 线程池
 
 #include <iostream>
@@ -90,6 +91,7 @@ int main(int argc, char* argv[]) {
                       << "  DB_PASSWORD      覆盖数据库密码\n"
                       << "  DEEPSEEK_API_KEY 覆盖 DeepSeek API Key\n"
                       << "  OPENAI_API_KEY   覆盖 OpenAI API Key\n";
+                      << "  ANTHROPIC_API_KEY   覆盖 Anthropic API Key\n";
             return 0;
         }
     }
@@ -127,6 +129,12 @@ int main(int argc, char* argv[]) {
     if (env_openai_key) {
         config.openai_api_key = env_openai_key;
         std::cout << "[main] OpenAI API Key 已从环境变量 OPENAI_API_KEY 覆盖\n";
+    }
+
+    const char* env_anthropic_key = std::getenv("ANTHROPIC_API_KEY");
+    if (env_anthropic_key) {
+        config.anthropic_api_key = env_anthropic_key;
+        std::cout << "[main] Anthropic API Key 已从环境变量 ANTHROPIC_API_KEY 覆盖\n";
     }
 
     // ---- 4. 初始化数据库连接池 ----
@@ -177,6 +185,22 @@ int main(int argc, char* argv[]) {
             )
         );
     }
+    if (!config.openai_api_key.empty()) {
+        ai_factory->register_adapter(
+            std::make_unique<openai_adapter>(
+                config.openai_api_key,
+                config.openai_base_url
+            )
+        );
+    }
+    if (!config.anthropic_api_key.empty()) {
+        ai_factory->register_adapter(
+            std::make_unique<anthropic_adapter>(
+                config.anthropic_api_key,
+                config.anthropic_base_url
+            )
+        );
+    }
     if (ai_factory->count() == 0) {
         std::cerr << "[main] 警告: 没有配置任何 AI 适配器\n";
     }
@@ -222,7 +246,7 @@ int main(int argc, char* argv[]) {
             }
 
             // ---- 3. 根据 model 选择适配器 ----
-            std::string model = request_body.value("model", "deepseek-chat");//  从请求体取 model 字段，没写则默认 "deepseek-chat"
+            std::string model = request_body.value("model", "deepseek-v4-flash");//  从请求体取 model 字段，没写则默认
             adapter* ai = ai_factory->create(model);
 
             if (!ai) {

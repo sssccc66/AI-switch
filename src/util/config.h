@@ -35,6 +35,8 @@ struct app_config {
     std::string deepseek_base_url = "https://api.deepseek.com/v1";
     std::string openai_api_key;             // OpenAI API Key
     std::string openai_base_url = "https://api.openai.com/v1";
+    std::string anthropic_api_key;          // Anthropic API Key
+    std::string anthropic_base_url = "https://api.anthropic.com/v1
 
     // ---- 管理 ----
     std::string admin_master_key = "admin-master-key-001";  // 管理接口的 Master Key

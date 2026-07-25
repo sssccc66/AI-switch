@@ -64,6 +64,11 @@ app_config app_config::from_file(const std::string& path) {
                 cfg.openai_api_key  = oa.value("api_key",  cfg.openai_api_key);
                 cfg.openai_base_url = oa.value("base_url", cfg.openai_base_url);
             }
+            if (models.contains("anthropic")) {
+                const auto& ac = models["anthropic"];
+                cfg.anthropic_api_key  = ac.value("api_key",  cfg.anthropic_api_key);
+                cfg.anthropic_base_url = ac.value("base_url", cfg.anthropic_base_url);
+            }
         }
 
         // ---- 管理接口配置 ----
@@ -79,6 +84,7 @@ app_config app_config::from_file(const std::string& path) {
                   << ", rate_limit=" << cfg.rate_limit_refill_rate << "/s"
                   << ", deepseek=" << (cfg.deepseek_api_key.empty() ? "未配置" : "已配置")
                   << ", openai=" << (cfg.openai_api_key.empty() ? "未配置" : "已配置")
+                  << ", anthropic=" << (cfg.anthropic_api_key.empty() ? "未配置" : "已配置")
                   << "\n";
 
         cfg.loaded = true;  // ✓ 标记配置已成功加载
